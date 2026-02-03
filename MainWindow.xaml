@@ -12,8 +12,19 @@
     <Window.SystemBackdrop>
         <MicaBackdrop />
     </Window.SystemBackdrop>
+    <NavigationView x:Name="MainNavigation"
+                PaneDisplayMode="Left"
+                IsBackButtonVisible="Collapsed"
+                IsSettingsVisible="True"
+                Header="SQL Data Migration Tool"
+                    SelectionChanged="MainNavigation_SelectionChanged">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Connections" Icon="Link" Tag="ConnectionsPage"/>
+            <NavigationViewItem Content="Migration" Icon="Sync" Tag="MigrationPage"/>
+        </NavigationView.MenuItems>
+        <NavigationView.Content>
+            <Frame x:Name="ContentFrame"/>
+        </NavigationView.Content>
+    </NavigationView>
 
-    <Grid>
-
-    </Grid>
 </Window>

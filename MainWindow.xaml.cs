@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Microsoft.Data.SqlClient;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -26,6 +27,26 @@ namespace MigrationTool
         public MainWindow()
         {
             InitializeComponent();
+            // This makes the title bar look integrated with the app
+            ExtendsContentIntoTitleBar = true;
+            // Set the default page to Connections
+            ContentFrame.Navigate(typeof(ConnectionsPage));
+        }
+
+        private void MainNavigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+        {
+            var selectedItem = args.SelectedItemContainer as NavigationViewItem;
+            if (selectedItem?.Tag?.ToString() == "ConnectionsPage")
+            {
+                ContentFrame.Navigate(typeof(ConnectionsPage));
+            }
+            else if (selectedItem?.Tag?.ToString() == "MigrationPage")
+            {
+                ContentFrame.Navigate(typeof(MigrationPage));
+            }
         }
     }
+
+
+
 }
