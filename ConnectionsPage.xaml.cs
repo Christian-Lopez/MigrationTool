@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Windows.Storage;
 using MigrationTool.Shared;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Windows.Security.Credentials;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -29,6 +31,11 @@ namespace MigrationTool
         public ConnectionsPage()
         {
             InitializeComponent();
+            // Wire up the loaded event
+            this.Loaded += (s, e) =>
+            {
+                LoadSavedSettings();
+            };
         }
         private async void TestSourceConnection_Click(object sender, RoutedEventArgs e)
         {
@@ -47,6 +54,7 @@ namespace MigrationTool
                 builder.UserID = SourceUser.Text;
                 builder.Password = SourcePassword.Password;
             }
+            SaveBasicSettings(true, SourceServer.Text, SourceDatabase.Text, SourceUser.Text, SourcePassword.Password, SourceUseWindowsAuth.IsChecked ?? false);
             if (await OpenConnectionAsync(builder.ConnectionString))
             {
                 // SAVE TO DESTINATION SLOT
@@ -59,18 +67,19 @@ namespace MigrationTool
             // Build the string dynamically
             var builder = new SqlConnectionStringBuilder
             {
-                DataSource = SourceServer.Text,
-                InitialCatalog = SourceDatabase.Text,
-                IntegratedSecurity = SourceUseWindowsAuth.IsChecked ?? false,
+                DataSource = DestinationServer.Text,
+                InitialCatalog = DestinationDatabase.Text,
+                IntegratedSecurity = DestinationUseWindowsAuth.IsChecked ?? false,
                 Encrypt = true,
                 TrustServerCertificate = true
             };
             // Only add credentials if NOT using Windows Auth
-            if (!(SourceUseWindowsAuth.IsChecked ?? false))
+            if (!(DestinationUseWindowsAuth.IsChecked ?? false))
             {
-                builder.UserID = SourceUser.Text;
-                builder.Password = SourcePassword.Password;
+                builder.UserID = DestinationUser.Text;
+                builder.Password = DestinationPassword.Password;
             }
+            SaveBasicSettings(false, DestinationServer.Text, DestinationDatabase.Text, DestinationUser.Text, DestinationPassword.Password, DestinationUseWindowsAuth.IsChecked ?? false);
             if (await OpenConnectionAsync(builder.ConnectionString))
             {
                 // SAVE TO DESTINATION SLOT
@@ -115,5 +124,115 @@ namespace MigrationTool
             DestinationUser.IsEnabled = !isWindowsAuthD;
             DestinationPassword.IsEnabled = !isWindowsAuthD;
         }
+        private void SaveBasicSettings(bool isSource, string server, string database, string user, string password, bool isWindowsAuth)
+        {
+            var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
+            
+            string prefix = isSource ? "Source" : "Dest";
+            
+            localSettings.Values[$"{prefix}Server"] = server;
+            localSettings.Values[$"{prefix}Database"] = database;
+            localSettings.Values[$"{prefix}User"] = user;
+            localSettings.Values[$"{prefix}UseWindowsAuth"] = isWindowsAuth;
+
+            // 2. Save Password securely to Credential Locker
+            if (!isWindowsAuth && !string.IsNullOrEmpty(password))
+            {
+                var vault = new Windows.Security.Credentials.PasswordVault();
+                // Unique resource name including the database
+                string resourceKey = $"SQLDataBridge_{prefix}_{server}_{database}";
+
+                var credential = new Windows.Security.Credentials.PasswordCredential(
+                    resourceKey, user, password);
+
+                vault.Add(credential);
+            }
+                       
+
+        }
+        private void LoadSavedSettings()
+        {
+            try
+            {
+                var localSettings = Windows.Storage.ApplicationData.Current.LocalSettings;
+                var vault = new PasswordVault();
+
+                // 1. Load basic text fields
+                if (localSettings.Values.ContainsKey("SourceServer"))
+                    SourceServer.Text = localSettings.Values["SourceServer"].ToString();
+
+                if (localSettings.Values.ContainsKey("DestServer"))
+                    DestinationServer.Text = localSettings.Values["DestServer"].ToString();
+
+                if (localSettings.Values.ContainsKey("SourceDatabase"))
+                    SourceDatabase.Text = localSettings.Values["SourceDatabase"].ToString();
+
+                if (localSettings.Values.ContainsKey("DestDatabase"))
+                    DestinationDatabase.Text = localSettings.Values["DestDatabase"].ToString();
+
+                if (localSettings.Values.ContainsKey("SourceUser"))
+                    SourceUser.Text = localSettings.Values["SourceUser"].ToString();
+
+                if (localSettings.Values.ContainsKey("DestUser"))
+                    DestinationUser.Text = localSettings.Values["DestUser"].ToString();
+
+                // 2. Load the Windows Auth toggle state
+                if (localSettings.Values.ContainsKey("SourceUseWindowsAuth"))
+                {
+                    bool isWindowsAuth = (bool)localSettings.Values["SourceUseWindowsAuth"];
+                    SourceUseWindowsAuth.IsChecked = isWindowsAuth;
+                    // Manually trigger the UI state change for the textboxes
+                    Auth_CheckChanged(null, null);
+                }
+                if (localSettings.Values.ContainsKey("DestUseWindowsAuth"))
+                {
+                    bool isWindowsAuth = (bool)localSettings.Values["DestUseWindowsAuth"];
+                    DestinationUseWindowsAuth.IsChecked = isWindowsAuth;
+                    // Manually trigger the UI state change for the textboxes
+                    Auth_CheckChanged(null, null);
+                }
+
+                // 3. Retrieve Password securely if not using Windows Auth
+                if (!(SourceUseWindowsAuth.IsChecked ?? false))
+                {
+                    string server = SourceServer.Text;
+                    string db = SourceDatabase.Text;
+                    string user = SourceUser.Text;
+                    string resourceKey = $"SQLDataBridge_Source_{server}_{db}";
+
+                    try
+                    {
+                        var cred = vault.Retrieve(resourceKey, user);
+                        SourcePassword.Password = cred.Password;
+                    }
+                    catch
+                    {
+                        // No password found for this specific server/db combo; ignore
+                    }
+                }
+                if (!(DestinationUseWindowsAuth.IsChecked ?? false))
+                {
+                    string server = DestinationServer.Text;
+                    string db = DestinationDatabase.Text;
+                    string user = DestinationUser.Text;
+                    string resourceKey = $"SQLDataBridge_Dest_{server}_{db}";
+
+                    try
+                    {
+                        var cred = vault.Retrieve(resourceKey, user);
+                        DestinationPassword.Password = cred.Password;
+                    }
+                    catch
+                    {
+                        // No password found for this specific server/db combo; ignore
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowStatus("Could not load saved settings.", InfoBarSeverity.Informational);
+            }
+        }
+        
     }
 }
