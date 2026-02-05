@@ -26,17 +26,17 @@
                         PlaceholderText="Search tables by name or schema..." 
                         QueryIcon="Find"                        
                         Margin="0,0,0,10"/>
-                <controls:DataGrid x:Name="TablesGrid"
-                                    Grid.Row="1"
-                     AutoGenerateColumns="False"
-                     SelectionMode="Extended"
-                     IsReadOnly="True"
-                     GridLinesVisibility="Horizontal"
-                     VerticalAlignment="Stretch"
-                     HorizontalAlignment="Stretch"
-                        ItemsSource="{x:Bind TableList}">
+                <controls:DataGrid x:Name="TablesGrid" 
+           Grid.Row="1"
+           AutoGenerateColumns="False"
+           SelectionMode="Extended"
+           IsReadOnly="True"
+           GridLinesVisibility="Horizontal"
+           VerticalAlignment="Stretch"
+           HorizontalAlignment="Stretch">
                     <controls:DataGrid.Columns>
-                        <controls:DataGridTextColumn Header="Table Name" Binding="{Binding Name}" />
+                        <controls:DataGridTextColumn Header="Table Name" Binding="{Binding Name}" Width="*"/>
+                        <controls:DataGridTextColumn Header="Schema" Binding="{Binding Schema}" Width="100"/>
                     </controls:DataGrid.Columns>
                 </controls:DataGrid>
             </Grid>
@@ -65,7 +65,7 @@
                  Height="10"
                  Visibility="Collapsed"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
-                <Button >
+                <Button Click="RefreshTables_Click">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <SymbolIcon Symbol="Refresh"/>
                         <TextBlock Text="Refresh Tables"/>
