@@ -46,7 +46,11 @@ namespace MigrationTool
                 InitialCatalog = SourceDatabase.Text,
                 IntegratedSecurity = SourceUseWindowsAuth.IsChecked ?? false,
                 Encrypt = true,
-                TrustServerCertificate = true
+                TrustServerCertificate = true,
+                ConnectTimeout = 30,           // ADD THIS
+                Pooling = true,                // ADD THIS
+                MinPoolSize = 0,               // ADD THIS
+                MaxPoolSize = 100              // ADD THIS
             };
             // Only add credentials if NOT using Windows Auth
             if (!(SourceUseWindowsAuth.IsChecked ?? false))
@@ -71,7 +75,11 @@ namespace MigrationTool
                 InitialCatalog = DestinationDatabase.Text,
                 IntegratedSecurity = DestinationUseWindowsAuth.IsChecked ?? false,
                 Encrypt = true,
-                TrustServerCertificate = true
+                TrustServerCertificate = true,
+                 ConnectTimeout = 30,           // ADD THIS
+                Pooling = true,                // ADD THIS
+                MinPoolSize = 0,               // ADD THIS
+                MaxPoolSize = 100              // ADD THIS
             };
             // Only add credentials if NOT using Windows Auth
             if (!(DestinationUseWindowsAuth.IsChecked ?? false))
@@ -91,13 +99,28 @@ namespace MigrationTool
         {
             try
             {
+                // Clear the connection pool before attempting to connect
+                // This is CRITICAL for LocalDB instances
+                SqlConnection.ClearAllPools();
                 using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
+
+                // Optionally verify the connection with a simple query
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT 1";
+                await command.ExecuteScalarAsync();
+
+                
                 return true;
+            }
+            catch (SqlException ex)
+            {
+                ShowStatus($"Connection failed: {ex.Message}", InfoBarSeverity.Error);
+                return false;
             }
             catch (Exception ex)
             {
-                ShowStatus($"Connection failed: {ex.Message}", InfoBarSeverity.Error);
+                ShowStatus($"Unexpected error: {ex.Message}", InfoBarSeverity.Error);
                 return false;
             }
         }
