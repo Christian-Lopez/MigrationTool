@@ -39,10 +39,24 @@ namespace MigrationTool
         }
         private async void TestSourceConnection_Click(object sender, RoutedEventArgs e)
         {
+
+            var dataSource = SourceServer.Text;
+
+            // For LocalDB, resolve to actual pipe name for reliability
+            if (dataSource.Contains("(localdb)", StringComparison.OrdinalIgnoreCase))
+            {
+                var pipeName = await GetLocalDbPipeNameAsync();
+                if (!string.IsNullOrEmpty(pipeName))
+                {
+                    dataSource = pipeName;
+                    System.Diagnostics.Debug.WriteLine($"Resolved LocalDB to pipe: {pipeName}");
+                }
+            }
+
             // Build the string dynamically
             var builder = new SqlConnectionStringBuilder
             {
-                DataSource = SourceServer.Text,
+                DataSource = dataSource,
                 InitialCatalog = SourceDatabase.Text,
                 IntegratedSecurity = SourceUseWindowsAuth.IsChecked ?? false,
                 Encrypt = true,
@@ -68,6 +82,20 @@ namespace MigrationTool
         }
         private async void TestDestinationConnection_Click(object sender, RoutedEventArgs e)
         {
+
+            var dataSource = SourceServer.Text;
+
+            // For LocalDB, resolve to actual pipe name for reliability
+            if (dataSource.Contains("(localdb)", StringComparison.OrdinalIgnoreCase))
+            {
+                var pipeName = await GetLocalDbPipeNameAsync();
+                if (!string.IsNullOrEmpty(pipeName))
+                {
+                    dataSource = pipeName;
+                    System.Diagnostics.Debug.WriteLine($"Resolved LocalDB to pipe: {pipeName}");
+                }
+            }
+
             // Build the string dynamically
             var builder = new SqlConnectionStringBuilder
             {
@@ -95,6 +123,48 @@ namespace MigrationTool
                 ShowStatus("Destination Saved!", InfoBarSeverity.Success);
             }
         }
+        private async Task<string> GetLocalDbPipeNameAsync()
+        {
+            try
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "sqllocaldb",
+                    Arguments = "info MSSQLLocalDB",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = System.Diagnostics.Process.Start(startInfo);
+                if (process != null)
+                {
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+
+                    // Use regex to extract the pipe name
+                    var match = System.Text.RegularExpressions.Regex.Match(
+                        output,
+                        @"Instance pipe name:\s*(np:[^\r\n]+)",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                    );
+
+                    if (match.Success)
+                    {
+                        var pipeName = match.Groups[1].Value.Trim();
+                        System.Diagnostics.Debug.WriteLine($"Found pipe name: {pipeName}");
+                        return pipeName;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting LocalDB pipe name: {ex.Message}");
+            }
+
+            return null;
+        }
         private async Task<bool> OpenConnectionAsync(string connectionString)
         {
             try
@@ -102,26 +172,71 @@ namespace MigrationTool
                 // Clear the connection pool before attempting to connect
                 // This is CRITICAL for LocalDB instances
                 SqlConnection.ClearAllPools();
+
+
+                // For LocalDB: Ensure instance is started
+                if (connectionString.Contains("(localdb)", StringComparison.OrdinalIgnoreCase))
+                {
+                    await EnsureLocalDbStartedAsync();
+                }
+
                 using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
 
                 // Optionally verify the connection with a simple query
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT 1";
-                await command.ExecuteScalarAsync();
+                //using var command = connection.CreateCommand();
+                //command.CommandText = "SELECT 1";
+                //await command.ExecuteScalarAsync();
 
-                
+                // Verify with a simple query
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT DB_NAME()";
+                var result = await command.ExecuteScalarAsync();
+
+                System.Diagnostics.Debug.WriteLine($"Successfully connected to: {result}");
+
                 return true;
             }
             catch (SqlException ex)
             {
-                ShowStatus($"Connection failed: {ex.Message}", InfoBarSeverity.Error);
+                ShowStatus($"SQL Error: {ex.Number} - {ex.Message}", InfoBarSeverity.Error);
+                System.Diagnostics.Debug.WriteLine($"SqlException Details: {ex}");
                 return false;
             }
             catch (Exception ex)
             {
-                ShowStatus($"Unexpected error: {ex.Message}", InfoBarSeverity.Error);
+                ShowStatus($"Error: {ex.Message}", InfoBarSeverity.Error);
+                System.Diagnostics.Debug.WriteLine($"Exception Details: {ex}");
                 return false;
+            }
+        }
+        private async Task EnsureLocalDbStartedAsync()
+        {
+            try
+            {
+                // Start LocalDB instance
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "sqllocaldb",
+                    Arguments = "start MSSQLLocalDB",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = System.Diagnostics.Process.Start(startInfo);
+                if (process != null)
+                {
+                    await process.WaitForExitAsync();
+                    // Give LocalDB a moment to fully initialize
+                    await Task.Delay(1000);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LocalDB start warning: {ex.Message}");
+                // Don't fail if we can't start it - it might already be running
             }
         }
         private void ShowStatus(string message, InfoBarSeverity severity)

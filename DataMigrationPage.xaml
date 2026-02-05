@@ -71,8 +71,8 @@
                         <TextBlock Text="Refresh Tables"/>
                     </StackPanel>
                 </Button>
-                <Button Style="{StaticResource AccentButtonStyle}" >
-                    <Button.Content>
+                <Button Style="{StaticResource AccentButtonStyle}"  Click="StartMigration_Click">
+                    <Button.Content >
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <SymbolIcon Symbol="Sync"/>
                             <TextBlock Text="Start Migration"/>
