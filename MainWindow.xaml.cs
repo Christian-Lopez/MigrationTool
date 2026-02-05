@@ -46,10 +46,7 @@ namespace MigrationTool
             {
                 ContentFrame.Navigate(typeof(DataMigrationPage));
             }
-            else if (selectedItem?.Tag?.ToString() == "MigrationsPage")
-            {
-                ContentFrame.Navigate(typeof(MigrationsPage));
-            }
+            
         }
         //private void ClearAllSettings()
         //{

@@ -21,7 +21,6 @@
         <NavigationView.MenuItems>
             <NavigationViewItem Content="Connections" Icon="Link" Tag="ConnectionsPage"/>
             <NavigationViewItem Content="Migration" Icon="Sync" Tag="MigrationPage"/>
-            <NavigationViewItem Content="Migration" Icon="Sync" Tag="MigrationsPage"/>
         </NavigationView.MenuItems>
         <NavigationView.PaneFooter>
             <StackPanel Padding="12" Spacing="8">
